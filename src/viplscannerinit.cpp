@@ -1859,7 +1859,6 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 					}
 				}
 			}
-#if 1
 			else if(commandfromgui.tune_request){
 				struct COMMAND_FROM_GUI commandfromgui = command_queue.front();
 				double band_seperation[2]={0x00};
@@ -2148,20 +2147,6 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 								memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
 							}
 							else if(arfcn==6) {
-								port_no[arfcn]=rf_chain_id;
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[0].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++) {
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-										break;
-								}
-								channel_data_local[rf_chain_id].num_channels = cnt;
-								num_channels+=cnt;
-								memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-							}
-							else if(arfcn==7) {
 								port_no[arfcn]=rf_chain_id;
 								struct config config_to_return;
 								get_freq_range_from_arfcn(channel_data[0].band, arfcn_list_by_group[arfcn][0], &config_to_return);
@@ -2485,259 +2470,125 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 
 					}
 				}else if(counter==2) {
-				  int32_t channel_counter = count_channel(channel_data[0].band, commandfromgui.arfcn_list, commandfromgui.number_of_arfcn_to_scan);
-				  for(int32_t n= 0;n<2;n++){
-					int16_t temp_arfcn[16]={0x00};
-					int32_t elem_size = 0;
-					if(n==0){
-						elem_size = channel_counter;
-						memcpy(temp_arfcn,commandfromgui.arfcn_list,sizeof(int16_t)*channel_counter);
-					}else{
-						elem_size = commandfromgui.number_of_arfcn_to_scan-channel_counter;
-						memcpy(temp_arfcn,commandfromgui.arfcn_list+channel_counter,sizeof(int16_t)*(commandfromgui.number_of_arfcn_to_scan-channel_counter));
-					}
 					if(commandfromgui.mode == MODE_SIMPLEX){
-						int16_t arfcn_list_by_group[5][8]={0x00};
-						int32_t max_rows = 0x00;
-						group_by(channel_data[n].band, temp_arfcn, arfcn_list_by_group, elem_size, &max_rows);
-						int32_t db_count =0x00;
-						for(int32_t arfcn =0;arfcn<max_rows;arfcn++){
-							if(arfcn_list_by_group[arfcn][0]==0x00)
-								continue;
-							struct config config_to_return;
-							get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-							channel_data[n].center_arfcn = temp_cont->vipl_rf_interface_obj.config.dl_freq_a = config_to_return.dl_freq;
-							temp_cont->vipl_rf_interface_obj.config.bandwidth = config_to_return.bandwidth;
-							channel_data[n].sample_rate = temp_cont->vipl_rf_interface_obj.config.sampleRate = config_to_return.sample_rate;
-							channel_data[n].samples_per_burst = temp_cont->vipl_rf_interface_obj.config.samples_per_burst = config_to_return.sample_rate;
-							temp_cont->vipl_rf_interface_obj.setup(temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.mboardCount, temp_cont->vipl_rf_interface_obj.config, MODE_SIMPLEX, db_count);
-							temp_cont->vipl_rf_interface_obj.lock_gps(temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.mBoard);
-							db_count++;
-						}
-						db_count =0x00;
-						bool done1,done2,done3,done4,done5,done6,done7,done8,done9;
-						done1=done2=done3=done4=done5=done6=done7=done8=done9=false;
-						for(int32_t arfcn =0;arfcn<max_rows;arfcn++){
-							if(arfcn_list_by_group[arfcn][0]==0x00)
-								continue;
-							if(db_count>=3)
-								break;
-							gsm_channel_data channel_data_local;
-							memcpy(&channel_data_local, &channel_data[n], sizeof(struct gsm_channel_data));
-							if(arfcn==0){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
+						int32_t rf_chain_id =0x00;
+						int32_t port_no[4]={0x00};
+						int32_t num_channels =0x00;
+						struct gsm_channel_data channel_data_local[4];
+						for(int32_t i=0x00;i<counter;i++) {
+							int16_t arfcn_list_by_group[5][8]={0x00};
+							int32_t max_rows = 0x00;
+							group_by(channel_data[0].band, commandfromgui.arfcn_list, arfcn_list_by_group, commandfromgui.number_of_arfcn_to_scan, &max_rows);
+							int32_t channel_counter = count_channel(channel_data[i].band, commandfromgui.arfcn_list, commandfromgui.number_of_arfcn_to_scan);
+							for(int32_t arfcn =0;arfcn<max_rows;arfcn++) {
+								if(arfcn_list_by_group[arfcn][0]==0x00)
+									continue;
+								if(rf_chain_id>3)
+									break;
+								if(arfcn==0) {
+									port_no[arfcn]=rf_chain_id;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									channel_data_local[rf_chain_id].num_channels = cnt;
+									num_channels+=cnt;
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+								}else if(arfcn==1) {
+									port_no[arfcn]=rf_chain_id;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									channel_data_local[rf_chain_id].num_channels = cnt;
+									num_channels+=cnt;
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+								}else if(arfcn==2) {
+									port_no[arfcn]=rf_chain_id;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+								}else if(arfcn==3) {
+									port_no[arfcn]=rf_chain_id;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+								}else if(arfcn==4) {
+									port_no[arfcn]=rf_chain_id;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									channel_data_local[rf_chain_id].num_channels = cnt;
+									num_channels+=cnt;
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+								}else if(arfcn==5) {
+									port_no[arfcn]=rf_chain_id;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+								}else if(arfcn==6) {
+									port_no[arfcn]=rf_chain_id;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									channel_data_local[rf_chain_id].num_channels = cnt;
+									num_channels+=cnt;
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+								}else if(arfcn==7) {
+									port_no[arfcn]=rf_chain_id;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									channel_data_local[rf_chain_id].num_channels = cnt;
+									num_channels+=cnt;
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
 								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb1==NULL)
-									cb1 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								if(cbuffercf_size(cb1)>0)
-									cbuffercf_release(cb1,cbuffercf_size(cb1));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb1,false));
-								sem_wait(&start_streaming_init);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb1, 0));
-								if(done1==false){
-									done1= true;
-									db_count++;
-								}
-							}else if(arfcn==1){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb2==NULL)
-									cb2 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								if(cbuffercf_size(cb2)>0)
-									cbuffercf_release(cb2,cbuffercf_size(cb2));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb2,false));
-								sem_wait(&start_streaming_init);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb2, 0));
-								if(done2==false){
-									done2= true;
-									db_count++;
-								}
-							}else if(arfcn==2){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb3 ==NULL)
-									cb3 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								if(cbuffercf_size(cb3)>0)
-									cbuffercf_release(cb3,cbuffercf_size(cb3));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb3,false));
-								sem_wait(&start_streaming_init);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb3, 0));
-								if(done3==false){
-									done3= true;
-									db_count++;
-								}
-
-							}else if(arfcn==3){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb4==NULL)
-									cb4 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								if(cbuffercf_size(cb4)>0)
-									cbuffercf_release(cb4,cbuffercf_size(cb4));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb4,false));
-								sem_wait(&start_streaming_init);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb4, 0));
-								if(done4==false){
-									done4= true;
-									db_count++;
-								}
-
-							}else if(arfcn==4){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb5==NULL)
-									cb5 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								if(cbuffercf_size(cb5)>0)
-									cbuffercf_release(cb5,cbuffercf_size(cb5));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb5,false));
-								sem_wait(&start_streaming_init);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb5, 0));
-								if(done5==false){
-									done5= true;
-									db_count++;
-								}
-
-							}else if(arfcn==5){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb6==NULL)
-									cb6 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								if(cbuffercf_size(cb6)>0)
-									cbuffercf_release(cb6,cbuffercf_size(cb6));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb6,false));
-								sem_wait(&start_streaming_init);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb6, 0));
-								if(done6==false){
-									done6= true;
-									db_count++;
-								}
-
-							}else if(arfcn==6){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb7==NULL)
-									cb7 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								if(cbuffercf_size(cb7)>0)
-									cbuffercf_release(cb7,cbuffercf_size(cb7));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb7,false));
-								sem_wait(&start_streaming_init);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb7, 0));
-								if(done7==false){
-									done7= true;
-									db_count++;
-								}
-							}else if(arfcn==7){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb8==NULL)
-									cb8 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								if(cbuffercf_size(cb8)>0)
-									cbuffercf_release(cb8,cbuffercf_size(cb8));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb8,false));
-								sem_wait(&start_streaming_init);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb8, 0));
-								if(done8==false){
-									done8= true;
-									db_count++;
-								}
-							}else if(arfcn==8){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb9==NULL)
-									cb9 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								if(cbuffercf_size(cb9)>0)
-									cbuffercf_release(cb9,cbuffercf_size(cb9));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb9,false));
-								sem_wait(&start_streaming_init);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb9, 0));
-								if(done9==false){
-									done9= true;
-									db_count++;
-								}
+								rf_chain_id++;
 							}
 						}
-						rx_started = true;
+						tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, false, uhd_src, port_no, num_channels, rf_chain_id));
+						sem_wait(&start_streaming_init);
 						struct RESPONSE_TO_GUI write_to_gui;
 						memset(&write_to_gui, 0x00, sizeof(write_to_gui));
 						write_to_gui.tune_request = true;
@@ -2747,370 +2598,293 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 						memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
 						tcpServer_gui->write_action(buffer);
 					}else if(commandfromgui.mode == MODE_DUPLEX){
-						int16_t arfcn_list_by_group[5][8]={0x00};
-						int32_t max_rows = 0x00;
-						group_by(channel_data[0].band, commandfromgui.arfcn_list, arfcn_list_by_group, commandfromgui.number_of_arfcn_to_scan, &max_rows);
-						int32_t db_count =0x00;
-						for(int32_t arfcn =0;arfcn<max_rows;arfcn++){
-							if(arfcn_list_by_group[arfcn][0]==0x00)
-								continue;
-							if(db_count>2)
-								break;
-							struct config config_to_return;
-							get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-							channel_data[n].center_arfcn = temp_cont->vipl_rf_interface_obj.config.dl_freq_a = config_to_return.dl_freq;
-							temp_cont->vipl_rf_interface_obj.config.bandwidth = config_to_return.bandwidth;
-							channel_data[n].sample_rate = temp_cont->vipl_rf_interface_obj.config.sampleRate = config_to_return.sample_rate;
-							channel_data[n].samples_per_burst = temp_cont->vipl_rf_interface_obj.config.samples_per_burst = config_to_return.sample_rate;
-							temp_cont->vipl_rf_interface_obj.setup(temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.mboardCount, temp_cont->vipl_rf_interface_obj.config, MODE_SIMPLEX, db_count);
-							temp_cont->vipl_rf_interface_obj.lock_gps(temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.mBoard);
-							db_count++;
-							get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-							channel_data[n].center_arfcn = temp_cont->vipl_rf_interface_obj.config.dl_freq_a = config_to_return.dl_freq-band_seperation[0];
-							temp_cont->vipl_rf_interface_obj.config.bandwidth = config_to_return.bandwidth;
-							channel_data[n].sample_rate = temp_cont->vipl_rf_interface_obj.config.sampleRate = config_to_return.sample_rate;
-							channel_data[n].samples_per_burst = temp_cont->vipl_rf_interface_obj.config.samples_per_burst = config_to_return.sample_rate;
-							temp_cont->vipl_rf_interface_obj.setup(temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.mboardCount, temp_cont->vipl_rf_interface_obj.config, MODE_SIMPLEX, db_count);
-							temp_cont->vipl_rf_interface_obj.lock_gps(temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.mBoard);
-
-						}
-						//TODO: setup done; need to handle streaming for duplex
-						db_count =0x00;
-						bool done1,done2,done3,done4,done5,done6,done7,done8,done9;
-						done1=done2=done3=done4=done5=done6=done7=done8=done9=false;
-						for(int32_t arfcn =0;arfcn<max_rows;arfcn++){
-							if(arfcn_list_by_group[arfcn][0]==0x00)
-								continue;
-							if(db_count>2)
-								break;
-							gsm_channel_data channel_data_local;
-							memcpy(&channel_data_local, &channel_data[n], sizeof(struct gsm_channel_data));
-							if(arfcn==0){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb1==NULL)
-									cb1 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb1)>0)
-									cbuffercf_release(cb1,cbuffercf_size(cb1));
-								if(cb2==NULL)
-									cb2 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb2)>0)
-									cbuffercf_release(cb2,cbuffercf_size(cb2));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb1,true));
-								channel_data_local.center_arfcn = channel_data[n].center_arfcn-band_seperation[n];
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb2,true));
-								sem_wait(&start_streaming_init);
-								sem_wait(&start_streaming_init_uplink);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 50, db_count);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb1, 0));
-								rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count+1, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 75, db_count+1);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count+1, &cb2, 0));
-								if(done1==false){
-									done1= true;
-									db_count+=2;
-								}
-							}else if(arfcn==1){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][n], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb3==NULL)
-									cb3 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb3)>0)
-									cbuffercf_release(cb3,cbuffercf_size(cb3));
-								if(cb4==NULL)
-									cb4 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb4)>0)
-									cbuffercf_release(cb4,cbuffercf_size(cb4));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb3,true));
-								channel_data_local.center_arfcn = channel_data[n].center_arfcn-band_seperation[n];
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb4,true));
-								sem_wait(&start_streaming_init);
-								sem_wait(&start_streaming_init_uplink);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 50, db_count);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb3, 0));
-								rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count+1, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 75, db_count+1);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count+1, &cb4, 0));
-								if(done2==false){
-									done2= true;
-									db_count+=2;
-								}
-							}else if(arfcn==2){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb5==NULL)
-									cb5 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb5)>0)
-									cbuffercf_release(cb5,cbuffercf_size(cb5));
-								if(cb6==NULL)
-									cb6 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb6)>0)
-									cbuffercf_release(cb6,cbuffercf_size(cb6));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb4,true));
-								channel_data_local.center_arfcn = channel_data[0].center_arfcn-band_seperation[n];
-								tid_group.add_thread(new boost::thread(switch_channel_matrix_uplink, channel_data_local, 10011, "", &cb5,true));
-								sem_wait(&start_streaming_init);
-								sem_wait(&start_streaming_init_uplink);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 50, db_count);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, 0, &cb5, 0));
-								rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count+1, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 75, db_count+1);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, 0, &cb6, 0));
-								if(done3==false){
-									done3= true;
-									db_count+=2;
-								}
-
-							}else if(arfcn==3){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb7==NULL)
-									cb7 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb7)>0)
-									cbuffercf_release(cb7,cbuffercf_size(cb7));
-								if(cb8==NULL)
-									cb8 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb8)>0)
-									cbuffercf_release(cb8,cbuffercf_size(cb8));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb7,true));
-								channel_data_local.center_arfcn = channel_data[n].center_arfcn-band_seperation[n];
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb8,true));
-								sem_wait(&start_streaming_init);
-								sem_wait(&start_streaming_init_uplink);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 50, db_count);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb7, 0));
-								rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count+1, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 75, db_count+1);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count+1, &cb8, 0));
-								if(done4==false){
-									done4= true;
-									db_count+=2;
-								}
-
-							}else if(arfcn==4){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb9==NULL)
-									cb9 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb9)>0)
-									cbuffercf_release(cb9,cbuffercf_size(cb9));
-								if(cb10)
-									cb10 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb10)>0)
-									cbuffercf_release(cb10,cbuffercf_size(cb10));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb9,true));
-								channel_data_local.center_arfcn = channel_data[n].center_arfcn-band_seperation[n];
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb10,true));
-								sem_wait(&start_streaming_init);
-								sem_wait(&start_streaming_init_uplink);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 50, db_count);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb9, 0));
-								rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count+1, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 75, db_count+1);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count+1, &cb10, 0));
-								if(done5==false){
-									done5= true;
-									db_count+=2;
-								}
-
-							}else if(arfcn==5){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb11==NULL)
-									cb11 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb11)>0)
-									cbuffercf_release(cb11,cbuffercf_size(cb11));
-								if(cbuffercf_size(cb12)>0)
-									cb12 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb12)>0)
-									cbuffercf_release(cb12,cbuffercf_size(cb12));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb11,true));
-								channel_data_local.center_arfcn = channel_data[n].center_arfcn-band_seperation[n];
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb12,true));
-								sem_wait(&start_streaming_init);
-								sem_wait(&start_streaming_init_uplink);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 50, db_count);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb11, 0));
-								rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count+1, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 75, db_count+1);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count+1, &cb12, 0));
-								if(done6==false){
-									done6= true;
-									db_count+=2;
-								}
-
-							}else if(arfcn==6){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb13==NULL)
-									cb13 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb13)>0)
-									cbuffercf_release(cb13,cbuffercf_size(cb13));
-								if(cb14==NULL)
-									cb14 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb14)>0)
-									cbuffercf_release(cb14,cbuffercf_size(cb14));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb13,true));
-								channel_data_local.center_arfcn = channel_data[n].center_arfcn-band_seperation[n];
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb14,true));
-								sem_wait(&start_streaming_init);
-								sem_wait(&start_streaming_init_uplink);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 50, db_count);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb13, 0));
-								rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count+1, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 75, db_count+1);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count+1, &cb14, 0));
-								if(done7==false){
-									done7= true;
-									db_count+=2;
-								}
-							}else if(arfcn==7) {
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb15==NULL)
-									cb15 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb15)>0)
-									cbuffercf_release(cb15,cbuffercf_size(cb15));
-								if(cbuffercf_size(cb16)>0)
-									cb16 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb16)>0)
-									cbuffercf_release(cb16,cbuffercf_size(cb16));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb15,true));
-							        channel_data_local.center_arfcn = channel_data[n].center_arfcn-band_seperation[n];
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb16,true));
-								sem_wait(&start_streaming_init);
-								sem_wait(&start_streaming_init_uplink);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 50, db_count);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb15, 0));
-								rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count+1, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 75, db_count+1);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count+1, &cb16, 0));
-								if(done8==false){
-									done8= true;
-									db_count+=2;
-								}
-							}else if(arfcn==8){
-								struct config config_to_return;
-								get_freq_range_from_arfcn(channel_data[n].band, arfcn_list_by_group[arfcn][0], &config_to_return);
-								channel_data[n].center_arfcn =  config_to_return.dl_freq;
-								int32_t cnt = 0x00;
-								for(cnt=0x00; cnt<8; cnt++){
-									if(arfcn_list_by_group[arfcn][cnt]==0)
-									    break;
-								}
-								memcpy(channel_data_local.arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
-								channel_data_local.num_channels = cnt;
-								if(cb17==NULL)
-									cb17 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb17)>0)
-									cbuffercf_release(cb17,cbuffercf_size(cb17));
-								if(cb18==NULL)
-									cb18 = cbuffercf_create(sizeof(std::complex<float>)*temp_cont->vipl_rf_interface_obj.config.samples_per_burst*buffer_time_in_secs);
-								if(cbuffercf_size(cb18)>0)
-									cbuffercf_release(cb18,cbuffercf_size(cb18));
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb17,true));
-								channel_data_local.center_arfcn = channel_data[n].center_arfcn-band_seperation[n];
-								tid_group.add_thread(new boost::thread(switch_channel_matrix, channel_data_local, 10011, "", &cb18,true));
-								sem_wait(&start_streaming_init);
-								sem_wait(&start_streaming_init_uplink);
-								int32_t rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 50, db_count);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count, &cb17, 0));
-								rtnval = temp_cont->vipl_rf_interface_obj.set_rx_rate(temp_cont->vipl_rf_interface_obj.usrp, db_count+1, temp_cont->vipl_rf_interface_obj.config.samples_per_burst);
-								temp_cont->vipl_rf_interface_obj.set_gain(temp_cont->vipl_rf_interface_obj.usrp, 75, db_count+1);
-								tid_group.add_thread(new boost::thread(temp_cont->vipl_rf_interface_obj.start_streaming, temp_cont->vipl_rf_interface_obj.usrp, temp_cont->vipl_rf_interface_obj.config.samples_per_burst, db_count+1, &cb18, 0));
-								if(done9==false){
-									done9= true;
-									db_count+=2;
-								}
+						int32_t rf_chain_id =0x00;
+						int32_t port_no[4]={0x00};
+						int32_t num_channels =0x00;
+						struct gsm_channel_data channel_data_local[4];
+						for(int32_t i=0x00;i<counter;i++) {
+							int16_t arfcn_list_by_group[5][8]={0x00};
+							int32_t max_rows = 0x00;
+							group_by(channel_data[i].band, commandfromgui.arfcn_list, arfcn_list_by_group, commandfromgui.number_of_arfcn_to_scan, &max_rows);
+							int32_t db_count =0x00;
+							for(int32_t arfcn =0;arfcn<max_rows;arfcn++){
+								if(arfcn_list_by_group[arfcn][0]==0x00)
+									continue;
+								db_count++;
 							}
+							try{
+								uhd_src =  gr::uhd::usrp_source::make(dev_addr, uhd::io_type_t::COMPLEX_FLOAT32, db_count*2);
+							}catch(const std::exception& ex) {
+								//auto s = ex.what();
+								char msg[100]={0x00};
+								sprintf(msg,"error: lookup error %s", ex.what());
+								vipl_printf(msg,error_lvl, __FILE__, __LINE__);
+								command_queue.pop();
+								struct RESPONSE_TO_GUI write_to_gui;
+								memset(&write_to_gui, 0x00, sizeof(write_to_gui));
+								write_to_gui.tune_request = false;
+								uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t)*sizeof(write_to_gui));
+								memset(buffer, 0x00, sizeof(uint8_t)*sizeof(write_to_gui));
+								memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
+								tcpServer_gui->write_action(buffer);
+								rx_started = false;
+								continue;
+							}
+							uhd_src->set_clock_source("gpsdo",0x00);
+							{
+								char msg[100]={0x00};
+								sprintf(msg,"info: clock source set to %s", uhd_src->get_clock_source(0x00).c_str());
+								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+							}
+							uhd_src->set_time_source("gpsdo",0x00);
+							{
+								char msg[100]={0x00};
+								sprintf(msg,"info: time source set to %s", uhd_src->get_time_source(0x00).c_str());
+								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+							}
+							for(int32_t ii=0x00;ii<db_count;ii++){
+								uhd_src->set_auto_iq_balance(true, ii);
+								uhd_src->set_auto_dc_offset(true, ii);
+							}
+							db_count =0x00;
+							for(int32_t arfcn =0;arfcn<max_rows;arfcn++){
+								if(arfcn_list_by_group[arfcn][0]==0x00)
+									continue;
+								if(db_count>2)
+									break;
+								struct config config_to_return;
+								get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+								channel_data[0].center_arfcn = config_to_return.dl_freq;
+								channel_data[0].sample_rate = 10e6;
+								channel_data[0].samples_per_burst = 10e6;
+								uhd_src->set_center_freq(channel_data[i].center_arfcn, db_count);
+								{
+									char msg[100]={0x00};
+									sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",uhd_src->get_center_freq(db_count), db_count);
+									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+								}
+								uhd_src->set_center_freq(channel_data[i].center_arfcn-band_seperation[0], db_count+1);
+								{
+									char msg[100]={0x00};
+									sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",uhd_src->get_center_freq(db_count+1), db_count+1);
+									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+								}
+								uhd_src->set_gain(DEFAULT_GAIN_DWNLINK_NORMAL_SCAN, db_count);
+								{
+									char msg[100]={0x00};
+									sprintf(msg,"info: gain set to %f rf chain %d",uhd_src->get_gain(db_count), db_count);
+									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+								}
+
+								uhd_src->set_gain(DEFAULT_GAIN_UPLINK_NORMAL_SCAN, db_count+1);
+								{
+									char msg[100]={0x00};
+									sprintf(msg,"info: gain set to %f rf chain %d",uhd_src->get_gain(db_count+1), db_count+1);
+									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+								}
+
+								uhd_src->set_bandwidth(channel_data[i].sample_rate, db_count);
+								{
+									char msg[100]={0x00};
+									sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",uhd_src->get_bandwidth(db_count), db_count);
+									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+								}
+
+								uhd_src->set_bandwidth(channel_data[i].sample_rate, db_count+1);
+								{
+									char msg[100]={0x00};
+									sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",uhd_src->get_bandwidth(db_count+1), db_count+1);
+									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+								}
+								uhd_src->set_samp_rate(channel_data[0].sample_rate);
+								{
+									char msg[100]={0x00};
+									sprintf(msg,"info: sample rate set to %fmsps rf chain %d",uhd_src->get_samp_rate(), db_count);
+									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+								}
+
+								switch(db_count){
+								case 0:	uhd_src->set_antenna("RX1",db_count);
+										{
+											char msg[100]={0x00};
+											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+											vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+										}
+										uhd_src->set_antenna("RX2",db_count+1);
+										{
+											char msg[100]={0x00};
+											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, uhd_src->get_antenna(db_count+1).c_str());
+											vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+										}
+										break;
+								case 2:	uhd_src->set_antenna("RX1",db_count);
+										{
+											char msg[100]={0x00};
+											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+											vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+										}
+										uhd_src->set_antenna("RX2",db_count+1);
+										{
+											char msg[100]={0x00};
+											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, uhd_src->get_antenna(db_count+1).c_str());
+											vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+										}
+										break;
+								}
+
+								db_count+=2;
+							}
+							db_count =0x00;
+							bool done1,done2,done3,done4,done5,done6,done7,done8,done9;
+							done1=done2=done3=done4=done5=done6=done7=done8=done9=false;
+							int32_t port_no[4]={0x00};
+							int32_t num_channels =0x00;
+							struct gsm_channel_data channel_data_local[4];
+							for(int32_t bb=0x00;bb<4;bb++)
+								memcpy(&channel_data_local[bb], &channel_data[i], sizeof(struct gsm_channel_data));
+							int32_t rf_chain_id =0x00;
+							int32_t channel_count =0x00;
+							for(int32_t arfcn =0;arfcn<max_rows;arfcn++) {
+								if(arfcn_list_by_group[arfcn][0]==0x00)
+									continue;
+								if(rf_chain_id>2)
+									break;
+								if(arfcn==0) {
+									port_no[arfcn]=rf_chain_id;
+									//port_no[arfcn+1]=rf_chain_id+1;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									channel_data_local[rf_chain_id].num_channels = cnt;
+									num_channels+=cnt;
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+									db_count++;
+								}
+								else if(arfcn==1) {
+									port_no[arfcn]=rf_chain_id;
+									//port_no[arfcn+1]=rf_chain_id+1;
+									struct config config_to_return;
+									get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+									channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+									int32_t cnt = 0x00;
+									for(cnt=0x00; cnt<8; cnt++) {
+										if(arfcn_list_by_group[arfcn][cnt]==0)
+											break;
+									}
+									channel_data_local[rf_chain_id].num_channels = cnt;
+									num_channels+=cnt;
+									memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+								}
+								else if(arfcn==2) {
+										port_no[arfcn]=rf_chain_id;
+										//port_no[arfcn+1]=rf_chain_id+1;
+										struct config config_to_return;
+										get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+										channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+										int32_t cnt = 0x00;
+										for(cnt=0x00; cnt<8; cnt++) {
+											if(arfcn_list_by_group[arfcn][cnt]==0)
+												break;
+										}
+										memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+										db_count++;
+									}
+									else if(arfcn==3) {
+										port_no[arfcn]=rf_chain_id;
+										//port_no[arfcn+1]=rf_chain_id+1;
+										struct config config_to_return;
+										get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+										channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+										int32_t cnt = 0x00;
+										for(cnt=0x00; cnt<8; cnt++) {
+											if(arfcn_list_by_group[arfcn][cnt]==0)
+												break;
+										}
+										memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+										db_count++;
+									}
+									else if(arfcn==4) {
+										port_no[arfcn]=rf_chain_id;
+										//port_no[arfcn+1]=rf_chain_id+1;
+										struct config config_to_return;
+										get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+										channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+										int32_t cnt = 0x00;
+										for(cnt=0x00; cnt<8; cnt++) {
+											if(arfcn_list_by_group[arfcn][cnt]==0)
+												break;
+										}
+										channel_data_local[rf_chain_id].num_channels = cnt;
+										num_channels+=cnt;
+										memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+										db_count++;
+									}
+									else if(arfcn==5) {
+										port_no[arfcn]=rf_chain_id;
+										//port_no[arfcn+1]=rf_chain_id+1;
+										struct config config_to_return;
+										get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+										channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+										int32_t cnt = 0x00;
+										for(cnt=0x00; cnt<8; cnt++) {
+											if(arfcn_list_by_group[arfcn][cnt]==0)
+												break;
+										}
+										memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+										db_count++;
+									}
+									else if(arfcn==6) {
+										port_no[arfcn]=rf_chain_id;
+										//port_no[arfcn+1]=rf_chain_id+1;
+										struct config config_to_return;
+										get_freq_range_from_arfcn(channel_data[0].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+										channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+										int32_t cnt = 0x00;
+										for(cnt=0x00; cnt<8; cnt++) {
+											if(arfcn_list_by_group[arfcn][cnt]==0)
+												break;
+										}
+										channel_data_local[rf_chain_id].num_channels = cnt;
+										num_channels+=cnt;
+										memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+										db_count++;
+									}
+									else if(arfcn==7) {
+										port_no[arfcn]=rf_chain_id;
+										//port_no[arfcn+1]=rf_chain_id+1;
+										struct config config_to_return;
+										get_freq_range_from_arfcn(channel_data[i].band, arfcn_list_by_group[arfcn][0], &config_to_return);
+										channel_data_local[rf_chain_id].center_arfcn = config_to_return.dl_freq;
+										int32_t cnt = 0x00;
+										for(cnt=0x00; cnt<8; cnt++) {
+											if(arfcn_list_by_group[arfcn][cnt]==0)
+												break;
+										}
+										channel_data_local[rf_chain_id].num_channels = cnt;
+										num_channels+=cnt;
+										memcpy(channel_data_local[rf_chain_id].arfcn_list, arfcn_list_by_group[arfcn],sizeof(int16_t)*cnt);
+										db_count++;
+									}
+									rf_chain_id+=1;
+								}
+								tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, true, uhd_src, port_no, num_channels, rf_chain_id));
+								sem_wait(&start_streaming_init);
+								struct RESPONSE_TO_GUI write_to_gui;
+								memset(&write_to_gui, 0x00, sizeof(write_to_gui));
+								write_to_gui.tune_request = true;
+								write_to_gui.already_tuned = false;
+								uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t)*sizeof(write_to_gui));
+								memset(buffer, 0x00, sizeof(uint8_t)*sizeof(write_to_gui));
+								memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
+								tcpServer_gui->write_action(buffer);
 						}
-						struct RESPONSE_TO_GUI write_to_gui;
-						memset(&write_to_gui, 0x00, sizeof(write_to_gui));
-						write_to_gui.tune_request = true;
-						write_to_gui.already_tuned = false;
-						uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t)*sizeof(write_to_gui));
-						memset(buffer, 0x00, sizeof(uint8_t)*sizeof(write_to_gui));
-						memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
-						tcpServer_gui->write_action(buffer);
-					}else if(commandfromgui.tx_tune_request){
-						//TODO launch downgrader
 					}
 				}
-			}
-#endif
 			}else if(commandfromgui.tune_gps){
 				if(gps_started){
 					struct RESPONSE_TO_GUI write_to_gui;

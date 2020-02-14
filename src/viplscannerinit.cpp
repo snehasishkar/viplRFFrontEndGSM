@@ -1101,6 +1101,7 @@ static void vipl_scanner_init::start_filter_iq_sharing(struct gsm_channel_data c
 struct initialization_status{
 	bool status;
 	vipl_rf_interface vipl_rf_interface_obj;
+	gr::uhd::usrp_source::sptr uhd_src;
 	char mboard_ip[16];
 	//struct RFNOC_Config rfnoc_config;
 	struct initialization_status *next;
@@ -1707,6 +1708,52 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 					continue;
 				}
 
+				while(temp_check!=NULL){
+					if(strcmp(temp_check->mboard_ip,commandfromgui.mboard_ip)==0x00){
+						found = true;
+						break;
+					}
+					temp_check = temp_check->next;
+				}
+				if(!found){
+					std::string temp("addr=");
+					std::string args = temp+commandfromgui.mboard_ip;
+					struct initialization_status *temp_link = (struct initialization_status *)malloc(sizeof(struct initialization_status));
+					temp_link->status = true;
+					std::string arg("addr=");
+					std::string arg_dev = arg+commandfromgui.mboard_ip;
+					uhd::device_addr_t dev_addr(arg_dev);
+					gr::uhd::usrp_source::sptr uhd_src;
+					try{
+						temp_link->uhd_src =  gr::uhd::usrp_source::make(dev_addr, uhd::io_type_t::COMPLEX_FLOAT32, 4);
+
+					}catch(const std::exception& ex) {
+						//auto s = ex.what();
+						char msg[100]={0x00};
+						sprintf(msg,"error: lookup error %s", ex.what());
+						vipl_printf(msg,error_lvl, __FILE__, __LINE__);
+						command_queue.pop();
+						struct RESPONSE_TO_GUI write_to_gui;
+						memset(&write_to_gui, 0x00, sizeof(write_to_gui));
+						write_to_gui.tune_request = false;
+						uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t)*sizeof(write_to_gui));
+						memset(buffer, 0x00, sizeof(uint8_t)*sizeof(write_to_gui));
+						memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
+						tcpServer_gui->write_action(buffer);
+						rx_started = false;
+						continue;
+					}
+					if(head==NULL){
+						temp_cont = head = cont = temp_link;
+					}else{
+						cont->next = temp_cont;
+						temp_cont = cont = temp_cont;
+					}
+				}else{
+					temp_cont = temp_check;
+				}
+
+
 				both_bands_done = counter = 0x00;
 				char *token = strtok(commandfromgui.band,",");
 				//Set band seperation for all bands. Currently 900 and 1800 implemented
@@ -1773,45 +1820,24 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 						channel_data[0].chain_num = 0x00;
 						channel_data[0].sample_rate = channel_data[0].samples_per_burst = 2e6;
 						channel_data[0].total_no_of_samps = channel_data[0].samples_per_burst;
-						std::string arg("addr=");
-						std::string arg_dev = arg+commandfromgui.mboard_ip;
-						uhd::device_addr_t dev_addr(arg_dev);
-						gr::uhd::usrp_source::sptr uhd_src;
-						try{
-							uhd_src =  gr::uhd::usrp_source::make(dev_addr, uhd::io_type_t::COMPLEX_FLOAT32, 4);
-						}catch(const std::exception& ex) {
-							//auto s = ex.what();
-							char msg[100]={0x00};
-							sprintf(msg,"error: lookup error %s", ex.what());
-							vipl_printf(msg,error_lvl, __FILE__, __LINE__);
-							command_queue.pop();
-							struct RESPONSE_TO_GUI write_to_gui;
-							memset(&write_to_gui, 0x00, sizeof(write_to_gui));
-							write_to_gui.tune_request = false;
-							uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t)*sizeof(write_to_gui));
-							memset(buffer, 0x00, sizeof(uint8_t)*sizeof(write_to_gui));
-							memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
-							tcpServer_gui->write_action(buffer);
-							rx_started = false;
-							continue;
-						}
-						uhd_src->set_clock_source("gpsdo",0x00);
+
+						temp_cont->uhd_src->set_clock_source("gpsdo",0x00);
 						{
 							char msg[100]={0x00};
-							sprintf(msg,"info: clock source set to %s", uhd_src->get_clock_source(0x00).c_str());
+							sprintf(msg,"info: clock source set to %s", temp_cont->uhd_src->get_clock_source(0x00).c_str());
 							vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 						}
-						uhd_src->set_time_source("gpsdo",0x00);
+						temp_cont->uhd_src->set_time_source("gpsdo",0x00);
 						{
 							char msg[100]={0x00};
-							sprintf(msg,"info: time source set to %s", uhd_src->get_time_source(0x00).c_str());
+							sprintf(msg,"info: time source set to %s", temp_cont->uhd_src->get_time_source(0x00).c_str());
 							vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 						}
 						for(int32_t ii=0x00;ii<4;ii++){
-							uhd_src->set_auto_iq_balance(true, ii);
-							uhd_src->set_auto_dc_offset(true, ii);
+							temp_cont->uhd_src->set_auto_iq_balance(true, ii);
+							temp_cont->uhd_src->set_auto_dc_offset(true, ii);
 						}
-						tid_group.add_thread(new boost::thread(ntwrk_scan_start_fft, channel_data[0], tcpServer_gui, uhd_src));
+						tid_group.add_thread(new boost::thread(ntwrk_scan_start_fft, channel_data[0], tcpServer_gui, temp_cont->uhd_src));
 						rx_started = true;
 					} else if(commandfromgui.tx_tune_request) {
 						boost::thread t2(start_baseband_processing, channel_data[0]);
@@ -1888,10 +1914,51 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 					command_queue.pop();
 					continue;
 				}
-				std::string temp("addr=");
-				std::string args = temp+commandfromgui.mboard_ip;
-				uhd::device_addr_t dev_addr(args);
-				gr::uhd::usrp_source::sptr uhd_src;
+
+				while(temp_check!=NULL){
+					if(strcmp(temp_check->mboard_ip,commandfromgui.mboard_ip)==0x00){
+						found = true;
+						break;
+					}
+					temp_check = temp_check->next;
+				}
+				if(!found){
+					std::string temp("addr=");
+					std::string args = temp+commandfromgui.mboard_ip;
+					struct initialization_status *temp_link = (struct initialization_status *)malloc(sizeof(struct initialization_status));
+					temp_link->status = true;
+					std::string arg("addr=");
+					std::string arg_dev = arg+commandfromgui.mboard_ip;
+					uhd::device_addr_t dev_addr(arg_dev);
+					gr::uhd::usrp_source::sptr uhd_src;
+					try{
+						temp_link->uhd_src =  gr::uhd::usrp_source::make(dev_addr, uhd::io_type_t::COMPLEX_FLOAT32, 4);
+
+					}catch(const std::exception& ex) {
+						//auto s = ex.what();
+						char msg[100]={0x00};
+						sprintf(msg,"error: lookup error %s", ex.what());
+						vipl_printf(msg,error_lvl, __FILE__, __LINE__);
+						command_queue.pop();
+						struct RESPONSE_TO_GUI write_to_gui;
+						memset(&write_to_gui, 0x00, sizeof(write_to_gui));
+						write_to_gui.tune_request = false;
+						uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t)*sizeof(write_to_gui));
+						memset(buffer, 0x00, sizeof(uint8_t)*sizeof(write_to_gui));
+						memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
+						tcpServer_gui->write_action(buffer);
+						rx_started = false;
+						continue;
+					}
+					if(head==NULL){
+						temp_cont = head = cont = temp_link;
+					}else{
+						cont->next = temp_cont;
+						temp_cont = cont = temp_cont;
+					}
+				}else{
+					temp_cont = temp_check;
+				}
 
 				char *token = strtok(commandfromgui.band,",");
 				struct gsm_channel_data channel_data[2];
@@ -1955,39 +2022,22 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 								continue;
 							db_count++;
 						}
-						try{
-							uhd_src =  gr::uhd::usrp_source::make(dev_addr, uhd::io_type_t::COMPLEX_FLOAT32, db_count);
-						}catch(const std::exception& ex) {
-							//auto s = ex.what();
-							char msg[100]={0x00};
-							sprintf(msg,"error: lookup error %s", ex.what());
-							vipl_printf(msg,error_lvl, __FILE__, __LINE__);
-							command_queue.pop();
-							struct RESPONSE_TO_GUI write_to_gui;
-							memset(&write_to_gui, 0x00, sizeof(write_to_gui));
-							write_to_gui.tune_request = false;
-							uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t)*sizeof(write_to_gui));
-							memset(buffer, 0x00, sizeof(uint8_t)*sizeof(write_to_gui));
-							memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
-							tcpServer_gui->write_action(buffer);
-							rx_started = false;
-							continue;
-						}
-						uhd_src->set_clock_source("gpsdo",0x00);
+
+						temp_cont->uhd_src->set_clock_source("gpsdo",0x00);
 						{
 							char msg[100]={0x00};
-							sprintf(msg,"info: clock source set to %s", uhd_src->get_clock_source(0x00).c_str());
+							sprintf(msg,"info: clock source set to %s", temp_cont->uhd_src->get_clock_source(0x00).c_str());
 							vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 						}
-						uhd_src->set_time_source("gpsdo",0x00);
+						temp_cont->uhd_src->set_time_source("gpsdo",0x00);
 						{
 							char msg[100]={0x00};
-							sprintf(msg,"info: time source set to %s", uhd_src->get_time_source(0x00).c_str());
+							sprintf(msg,"info: time source set to %s", temp_cont->uhd_src->get_time_source(0x00).c_str());
 							vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 						}
 						for(int32_t ii=0x00;ii<db_count;ii++){
-							uhd_src->set_auto_iq_balance(true, ii);
-							uhd_src->set_auto_dc_offset(true, ii);
+							temp_cont->uhd_src->set_auto_iq_balance(true, ii);
+							temp_cont->uhd_src->set_auto_dc_offset(true, ii);
 						}
 						db_count =0x00;
 						for(int32_t arfcn =0;arfcn<max_rows;arfcn++){
@@ -1999,56 +2049,56 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 							channel_data[0].center_arfcn = config_to_return.dl_freq;
 							channel_data[0].sample_rate = 10e6;
 							channel_data[0].samples_per_burst = 10e6;
-							uhd_src->set_center_freq(channel_data[0].center_arfcn, db_count);
+							temp_cont->uhd_src->set_center_freq(channel_data[0].center_arfcn, db_count);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",uhd_src->get_center_freq(db_count), db_count);
+								sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",temp_cont->uhd_src->get_center_freq(db_count), db_count);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
-							uhd_src->set_gain(DEFAULT_GAIN_DWNLINK, db_count);
+							temp_cont->uhd_src->set_gain(DEFAULT_GAIN_DWNLINK, db_count);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: gain set to %f rf chain %d",uhd_src->get_gain(db_count), db_count);
+								sprintf(msg,"info: gain set to %f rf chain %d",temp_cont->uhd_src->get_gain(db_count), db_count);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
-							uhd_src->set_bandwidth(channel_data[0].sample_rate, db_count);
+							temp_cont->uhd_src->set_bandwidth(channel_data[0].sample_rate, db_count);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",uhd_src->get_bandwidth(db_count), db_count);
+								sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",temp_cont->uhd_src->get_bandwidth(db_count), db_count);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
-							uhd_src->set_samp_rate(channel_data[0].sample_rate);
+							temp_cont->uhd_src->set_samp_rate(channel_data[0].sample_rate);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: sample rate set to %fmsps rf chain %d",uhd_src->get_samp_rate(), db_count);
+								sprintf(msg,"info: sample rate set to %fmsps rf chain %d",temp_cont->uhd_src->get_samp_rate(), db_count);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
 							switch(db_count){
-							case 0:	uhd_src->set_antenna("RX1",db_count);
+							case 0:	temp_cont->uhd_src->set_antenna("RX1",db_count);
 									{
 										char msg[100]={0x00};
-										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, temp_cont->uhd_src->get_antenna(db_count).c_str());
 										vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 									}
 									break;
-							case 1:	uhd_src->set_antenna("RX2",db_count);
+							case 1:	temp_cont->uhd_src->set_antenna("RX2",db_count);
 									{
 										char msg[100]={0x00};
-										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, temp_cont->uhd_src->get_antenna(db_count).c_str());
 										vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 									}
 									break;
-							case 2:	uhd_src->set_antenna("RX1",db_count);
+							case 2:	temp_cont->uhd_src->set_antenna("RX1",db_count);
 									{
 										char msg[100]={0x00};
-										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, temp_cont->uhd_src->get_antenna(db_count).c_str());
 										vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 									}
 									break;
-							case 3:	uhd_src->set_antenna("RX2",db_count);
+							case 3:	temp_cont->uhd_src->set_antenna("RX2",db_count);
 									{
 										char msg[100]={0x00};
-										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, temp_cont->uhd_src->get_antenna(db_count).c_str());
 										vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 									}
 									break;
@@ -2179,7 +2229,7 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 							}
 							rf_chain_id++;
 						}
-						tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, false, uhd_src, port_no, num_channels, rf_chain_id));
+						tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, false, temp_cont->uhd_src, port_no, num_channels, rf_chain_id));
 						sem_wait(&start_streaming_init);
 						struct RESPONSE_TO_GUI write_to_gui;
 						memset(&write_to_gui, 0x00, sizeof(write_to_gui));
@@ -2199,39 +2249,22 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 								continue;
 							db_count++;
 						}
-						try{
-							uhd_src =  gr::uhd::usrp_source::make(dev_addr, uhd::io_type_t::COMPLEX_FLOAT32, db_count*2);
-						}catch(const std::exception& ex) {
-							//auto s = ex.what();
-							char msg[100]={0x00};
-							sprintf(msg,"error: lookup error %s", ex.what());
-							vipl_printf(msg,error_lvl, __FILE__, __LINE__);
-							command_queue.pop();
-							struct RESPONSE_TO_GUI write_to_gui;
-							memset(&write_to_gui, 0x00, sizeof(write_to_gui));
-							write_to_gui.tune_request = false;
-							uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t)*sizeof(write_to_gui));
-							memset(buffer, 0x00, sizeof(uint8_t)*sizeof(write_to_gui));
-							memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
-							tcpServer_gui->write_action(buffer);
-							rx_started = false;
-							continue;
-						}
-						uhd_src->set_clock_source("gpsdo",0x00);
+
+						temp_cont->uhd_src->set_clock_source("gpsdo",0x00);
 						{
 							char msg[100]={0x00};
-							sprintf(msg,"info: clock source set to %s", uhd_src->get_clock_source(0x00).c_str());
+							sprintf(msg,"info: clock source set to %s", temp_cont->uhd_src->get_clock_source(0x00).c_str());
 							vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 						}
-						uhd_src->set_time_source("gpsdo",0x00);
+						temp_cont->uhd_src->set_time_source("gpsdo",0x00);
 						{
 							char msg[100]={0x00};
-							sprintf(msg,"info: time source set to %s", uhd_src->get_time_source(0x00).c_str());
+							sprintf(msg,"info: time source set to %s", temp_cont->uhd_src->get_time_source(0x00).c_str());
 							vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 						}
 						for(int32_t ii=0x00;ii<db_count;ii++){
-							uhd_src->set_auto_iq_balance(true, ii);
-							uhd_src->set_auto_dc_offset(true, ii);
+							temp_cont->uhd_src->set_auto_iq_balance(true, ii);
+							temp_cont->uhd_src->set_auto_dc_offset(true, ii);
 						}
 						db_count =0x00;
 						for(int32_t arfcn =0;arfcn<max_rows;arfcn++){
@@ -2244,76 +2277,76 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 							channel_data[0].center_arfcn = config_to_return.dl_freq;
 							channel_data[0].sample_rate = 10e6;
 							channel_data[0].samples_per_burst = 10e6;
-							uhd_src->set_center_freq(channel_data[0].center_arfcn, db_count);
+							temp_cont->uhd_src->set_center_freq(channel_data[0].center_arfcn, db_count);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",uhd_src->get_center_freq(db_count), db_count);
+								sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",temp_cont->uhd_src->get_center_freq(db_count), db_count);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
-							uhd_src->set_center_freq(channel_data[0].center_arfcn-band_seperation[0], db_count+1);
+							temp_cont->uhd_src->set_center_freq(channel_data[0].center_arfcn-band_seperation[0], db_count+1);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",uhd_src->get_center_freq(db_count+1), db_count+1);
+								sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",temp_cont->uhd_src->get_center_freq(db_count+1), db_count+1);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
-							uhd_src->set_gain(DEFAULT_GAIN_DWNLINK_NORMAL_SCAN, db_count);
+							temp_cont->uhd_src->set_gain(DEFAULT_GAIN_DWNLINK_NORMAL_SCAN, db_count);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: gain set to %f rf chain %d",uhd_src->get_gain(db_count), db_count);
-								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
-							}
-
-							uhd_src->set_gain(DEFAULT_GAIN_UPLINK_NORMAL_SCAN, db_count+1);
-							{
-								char msg[100]={0x00};
-								sprintf(msg,"info: gain set to %f rf chain %d",uhd_src->get_gain(db_count+1), db_count+1);
+								sprintf(msg,"info: gain set to %f rf chain %d",temp_cont->uhd_src->get_gain(db_count), db_count);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
 
-							uhd_src->set_bandwidth(channel_data[0].sample_rate, db_count);
+							temp_cont->uhd_src->set_gain(DEFAULT_GAIN_UPLINK_NORMAL_SCAN, db_count+1);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",uhd_src->get_bandwidth(db_count), db_count);
+								sprintf(msg,"info: gain set to %f rf chain %d",temp_cont->uhd_src->get_gain(db_count+1), db_count+1);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
 
-							uhd_src->set_bandwidth(channel_data[0].sample_rate, db_count+1);
+							temp_cont->uhd_src->set_bandwidth(channel_data[0].sample_rate, db_count);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",uhd_src->get_bandwidth(db_count+1), db_count+1);
+								sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",temp_cont->uhd_src->get_bandwidth(db_count), db_count);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
-							uhd_src->set_samp_rate(channel_data[0].sample_rate);
+
+							temp_cont->uhd_src->set_bandwidth(channel_data[0].sample_rate, db_count+1);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: sample rate set to %fmsps rf chain %d",uhd_src->get_samp_rate(), db_count);
+								sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",temp_cont->uhd_src->get_bandwidth(db_count+1), db_count+1);
+								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+							}
+							temp_cont->uhd_src->set_samp_rate(channel_data[0].sample_rate);
+							{
+								char msg[100]={0x00};
+								sprintf(msg,"info: sample rate set to %fmsps rf chain %d",temp_cont->uhd_src->get_samp_rate(), db_count);
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
 
 							switch(db_count){
-							case 0:	uhd_src->set_antenna("RX1",db_count);
+							case 0:	temp_cont->uhd_src->set_antenna("RX1",db_count);
 									{
 										char msg[100]={0x00};
-										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, temp_cont->uhd_src->get_antenna(db_count).c_str());
 										vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 									}
-									uhd_src->set_antenna("RX2",db_count+1);
+									temp_cont->uhd_src->set_antenna("RX2",db_count+1);
 									{
 										char msg[100]={0x00};
-										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, uhd_src->get_antenna(db_count+1).c_str());
+										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, temp_cont->uhd_src->get_antenna(db_count+1).c_str());
 										vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 									}
 									break;
-							case 2:	uhd_src->set_antenna("RX1",db_count);
+							case 2:	temp_cont->uhd_src->set_antenna("RX1",db_count);
 									{
 										char msg[100]={0x00};
-										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, temp_cont->uhd_src->get_antenna(db_count).c_str());
 										vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 									}
-									uhd_src->set_antenna("RX2",db_count+1);
+									temp_cont->uhd_src->set_antenna("RX2",db_count+1);
 									{
 										char msg[100]={0x00};
-										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, uhd_src->get_antenna(db_count+1).c_str());
+										sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, temp_cont->uhd_src->get_antenna(db_count+1).c_str());
 										vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 									}
 									break;
@@ -2460,7 +2493,7 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 
 							rf_chain_id+=1;
 						}
-						tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, true, uhd_src, port_no, num_channels, rf_chain_id));
+						tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, true, temp_cont->uhd_src, port_no, num_channels, rf_chain_id));
 						sem_wait(&start_streaming_init);
 						struct RESPONSE_TO_GUI write_to_gui;
 						memset(&write_to_gui, 0x00, sizeof(write_to_gui));
@@ -2590,7 +2623,7 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 								rf_chain_id++;
 							}
 						}
-						tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, false, uhd_src, port_no, num_channels, rf_chain_id));
+						tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, false, temp_cont->uhd_src, port_no, num_channels, rf_chain_id));
 						sem_wait(&start_streaming_init);
 						struct RESPONSE_TO_GUI write_to_gui;
 						memset(&write_to_gui, 0x00, sizeof(write_to_gui));
@@ -2615,39 +2648,22 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 									continue;
 								db_count++;
 							}
-							try{
-								uhd_src =  gr::uhd::usrp_source::make(dev_addr, uhd::io_type_t::COMPLEX_FLOAT32, db_count*2);
-							}catch(const std::exception& ex) {
-								//auto s = ex.what();
-								char msg[100]={0x00};
-								sprintf(msg,"error: lookup error %s", ex.what());
-								vipl_printf(msg,error_lvl, __FILE__, __LINE__);
-								command_queue.pop();
-								struct RESPONSE_TO_GUI write_to_gui;
-								memset(&write_to_gui, 0x00, sizeof(write_to_gui));
-								write_to_gui.tune_request = false;
-								uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t)*sizeof(write_to_gui));
-								memset(buffer, 0x00, sizeof(uint8_t)*sizeof(write_to_gui));
-								memcpy(buffer, &write_to_gui, sizeof(write_to_gui));
-								tcpServer_gui->write_action(buffer);
-								rx_started = false;
-								continue;
-							}
-							uhd_src->set_clock_source("gpsdo",0x00);
+
+							temp_cont->uhd_src->set_clock_source("gpsdo",0x00);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: clock source set to %s", uhd_src->get_clock_source(0x00).c_str());
+								sprintf(msg,"info: clock source set to %s", temp_cont->uhd_src->get_clock_source(0x00).c_str());
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
-							uhd_src->set_time_source("gpsdo",0x00);
+							temp_cont->uhd_src->set_time_source("gpsdo",0x00);
 							{
 								char msg[100]={0x00};
-								sprintf(msg,"info: time source set to %s", uhd_src->get_time_source(0x00).c_str());
+								sprintf(msg,"info: time source set to %s", temp_cont->uhd_src->get_time_source(0x00).c_str());
 								vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 							}
 							for(int32_t ii=0x00;ii<db_count;ii++){
-								uhd_src->set_auto_iq_balance(true, ii);
-								uhd_src->set_auto_dc_offset(true, ii);
+								temp_cont->uhd_src->set_auto_iq_balance(true, ii);
+								temp_cont->uhd_src->set_auto_dc_offset(true, ii);
 							}
 							db_count =0x00;
 							for(int32_t arfcn =0;arfcn<max_rows;arfcn++){
@@ -2660,76 +2676,76 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 								channel_data[0].center_arfcn = config_to_return.dl_freq;
 								channel_data[0].sample_rate = 10e6;
 								channel_data[0].samples_per_burst = 10e6;
-								uhd_src->set_center_freq(channel_data[i].center_arfcn, db_count);
+								temp_cont->uhd_src->set_center_freq(channel_data[i].center_arfcn, db_count);
 								{
 									char msg[100]={0x00};
-									sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",uhd_src->get_center_freq(db_count), db_count);
+									sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",temp_cont->uhd_src->get_center_freq(db_count), db_count);
 									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 								}
-								uhd_src->set_center_freq(channel_data[i].center_arfcn-band_seperation[0], db_count+1);
+								temp_cont->uhd_src->set_center_freq(channel_data[i].center_arfcn-band_seperation[0], db_count+1);
 								{
 									char msg[100]={0x00};
-									sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",uhd_src->get_center_freq(db_count+1), db_count+1);
+									sprintf(msg,"info: Frequency set to %0.9fMHz rf chain %d",temp_cont->uhd_src->get_center_freq(db_count+1), db_count+1);
 									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 								}
-								uhd_src->set_gain(DEFAULT_GAIN_DWNLINK_NORMAL_SCAN, db_count);
+								temp_cont->uhd_src->set_gain(DEFAULT_GAIN_DWNLINK_NORMAL_SCAN, db_count);
 								{
 									char msg[100]={0x00};
-									sprintf(msg,"info: gain set to %f rf chain %d",uhd_src->get_gain(db_count), db_count);
-									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
-								}
-
-								uhd_src->set_gain(DEFAULT_GAIN_UPLINK_NORMAL_SCAN, db_count+1);
-								{
-									char msg[100]={0x00};
-									sprintf(msg,"info: gain set to %f rf chain %d",uhd_src->get_gain(db_count+1), db_count+1);
+									sprintf(msg,"info: gain set to %f rf chain %d",temp_cont->uhd_src->get_gain(db_count), db_count);
 									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 								}
 
-								uhd_src->set_bandwidth(channel_data[i].sample_rate, db_count);
+								temp_cont->uhd_src->set_gain(DEFAULT_GAIN_UPLINK_NORMAL_SCAN, db_count+1);
 								{
 									char msg[100]={0x00};
-									sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",uhd_src->get_bandwidth(db_count), db_count);
+									sprintf(msg,"info: gain set to %f rf chain %d",temp_cont->uhd_src->get_gain(db_count+1), db_count+1);
 									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 								}
 
-								uhd_src->set_bandwidth(channel_data[i].sample_rate, db_count+1);
+								temp_cont->uhd_src->set_bandwidth(channel_data[i].sample_rate, db_count);
 								{
 									char msg[100]={0x00};
-									sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",uhd_src->get_bandwidth(db_count+1), db_count+1);
-									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
-								}
-								uhd_src->set_samp_rate(channel_data[0].sample_rate);
-								{
-									char msg[100]={0x00};
-									sprintf(msg,"info: sample rate set to %fmsps rf chain %d",uhd_src->get_samp_rate(), db_count);
+									sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",temp_cont->uhd_src->get_bandwidth(db_count), db_count);
 									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 								}
 
-								switch(db_count){
-								case 0:	uhd_src->set_antenna("RX1",db_count);
+								temp_cont->uhd_src->set_bandwidth(channel_data[i].sample_rate, db_count+1);
+								{
+									char msg[100]={0x00};
+									sprintf(msg,"info: bandwidth set to %fMHz rf chain %d",temp_cont->uhd_src->get_bandwidth(db_count+1), db_count+1);
+									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+								}
+								temp_cont->uhd_src->set_samp_rate(channel_data[0].sample_rate);
+								{
+									char msg[100]={0x00};
+									sprintf(msg,"info: sample rate set to %fmsps rf chain %d",temp_cont->uhd_src->get_samp_rate(), db_count);
+									vipl_printf(msg, error_lvl, __FILE__, __LINE__);
+								}
+
+								switch(db_count) {
+								case 0:	temp_cont->uhd_src->set_antenna("RX1",db_count);
 										{
 											char msg[100]={0x00};
-											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, temp_cont->uhd_src->get_antenna(db_count).c_str());
 											vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 										}
-										uhd_src->set_antenna("RX2",db_count+1);
+										temp_cont->uhd_src->set_antenna("RX2",db_count+1);
 										{
 											char msg[100]={0x00};
-											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, uhd_src->get_antenna(db_count+1).c_str());
+											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, temp_cont->uhd_src->get_antenna(db_count+1).c_str());
 											vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 										}
 										break;
-								case 2:	uhd_src->set_antenna("RX1",db_count);
+								case 2:	temp_cont->uhd_src->set_antenna("RX1",db_count);
 										{
 											char msg[100]={0x00};
-											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, uhd_src->get_antenna(db_count).c_str());
+											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count, temp_cont->uhd_src->get_antenna(db_count).c_str());
 											vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 										}
-										uhd_src->set_antenna("RX2",db_count+1);
+										temp_cont->uhd_src->set_antenna("RX2",db_count+1);
 										{
 											char msg[100]={0x00};
-											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, uhd_src->get_antenna(db_count+1).c_str());
+											sprintf(msg,"info: Antenna used with rf chain %d is %s",db_count+1, temp_cont->uhd_src->get_antenna(db_count+1).c_str());
 											vipl_printf(msg, error_lvl, __FILE__, __LINE__);
 										}
 										break;
@@ -2875,7 +2891,7 @@ void vipl_scanner_init::dequeue(tcp_server *tcpServer_gui) {
 									}
 									rf_chain_id+=1;
 								}
-								tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, true, uhd_src, port_no, num_channels, rf_chain_id));
+								tid_group.add_thread(new boost::thread(demod_agcch, channel_data_local, true, temp_cont->uhd_src, port_no, num_channels, rf_chain_id));
 								sem_wait(&start_streaming_init);
 								struct RESPONSE_TO_GUI write_to_gui;
 								memset(&write_to_gui, 0x00, sizeof(write_to_gui));

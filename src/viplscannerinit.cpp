@@ -860,6 +860,7 @@ static void vipl_scanner_init::demod_agcch(struct gsm_channel_data *channel_data
 		tb->start();
 		while(!stop_rx);
 		tb->stop();
+		tb->disconnect_all();
 		sleep(1);
 	}else{
 		gr::top_block_sptr tb = gr::make_top_block("duplex_monitor");
@@ -980,6 +981,7 @@ static void vipl_scanner_init::demod_agcch(struct gsm_channel_data *channel_data
 		tb->start();
 		while(!stop_rx);
 		tb->stop();
+		tb->disconnect_all();
 		sleep(1);
 	}
 }
@@ -1383,6 +1385,7 @@ static void vipl_scanner_init::ntwrk_scan_start_fft(struct gsm_channel_data chan
 		tb->stop();
 	}
 	uhd_src->clear_finished();
+	tb->disconnect_all();
 	sleep(1);
 	if(error_lvl==3)
 		std::cout<<"time elapsed "<<(float(std::clock()-begin_time)/CLOCKS_PER_SEC)<<"secs"<<std::endl;
